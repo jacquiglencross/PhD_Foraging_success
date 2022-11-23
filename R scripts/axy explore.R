@@ -6,6 +6,11 @@ pacman::p_load(tidyverse, dplyr, lubridate, stringr, purrr, #tidyr
                ggplot2, #datavis
                here, beepr, gridExtra, gganimate, magick) #other useful packages 
 
+rm(list = ls())
+gc()
+invisible(gc())
+
+
 
 
 setwd("E:/Deployments Robben 2022/02_2022R/")
