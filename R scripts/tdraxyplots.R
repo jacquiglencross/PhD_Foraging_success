@@ -17,11 +17,11 @@ tdrs <- readRDS("E:/Deployments Robben 2022/processed_data/TDR_final.RDS")
 deployids <- unique(tdrs$deployID)
 dives <- tdrs %>%
   select(DateTime, DiveID, Divephase, deployID)
-#i = deployids[1]
+i = deployids[1]
 for (i in deployids) {
   divespenguin <- dives %>%
   filter(deployID == i)
-  
+
   axy <- read.csv(paste0(i, "/",i,"_axytdr.csv"), header = T)
   
   axy1 <- axy %>%
@@ -36,15 +36,23 @@ for (i in deployids) {
   divephasenew <-  na.locf(divephases,fromLast=TRUE)
   
   axy2 <- axy1 %>%
+    arrange(DateTime) %>%
     select(-Divephase, -DiveID) %>%
     left_join(., divephasenew) %>%
-    filter(DiveID != 0)
+    filter(DiveID != 0) %>%
+    group_by(DiveID) %>%
+    mutate(bottom = ifelse(Divephase == "B", 1, 0),
+           bottom_length = sum(bottom)) %>%
+    filter(bottom_length > 3) 
   
   diveno <- unique(axy2$DiveID)
+  j = diveno[1]
   for (j in diveno) {
     axy3 <- axy2 %>%
-      filter(DiveID == j)
-    tdrplot <- ggplot(axy3, aes(DateTime)) +
+      filter(DiveID == j)  
+    tdr <- axy3 %>%filter(!is.na(Depth))
+
+    tdrplot <- ggplot(tdr, aes(DateTime)) +
       geom_line(aes(y =-Depth), color = "blue") 
     
     
