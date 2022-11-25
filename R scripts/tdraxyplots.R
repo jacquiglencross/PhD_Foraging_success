@@ -17,7 +17,7 @@ tdrs <- readRDS("E:/Deployments Robben 2022/processed_data/TDR_final.RDS")
 deployids <- unique(tdrs$deployID)
 dives <- tdrs %>%
   select(DateTime, DiveID, Divephase, deployID)
-i = deployids[1]
+#i = deployids[1]
 for (i in deployids) {
   divespenguin <- dives %>%
   filter(deployID == i)
@@ -46,7 +46,7 @@ for (i in deployids) {
     filter(bottom_length > 3) 
   
   diveno <- unique(axy2$DiveID)
-  j = diveno[1]
+  #j = diveno[1]
   for (j in diveno) {
     axy3 <- axy2 %>%
       filter(DiveID == j)  
