@@ -11,8 +11,82 @@ gc()
 invisible(gc())
 
 
+#filtering by tdr data first forage dive - 10 min
+
+tdr <- readRDS("E:/Deployments Robben 2022/processed_data/TDR_final.RDS")
+
+axy <- read.csv("E:/Deployments Robben 2022/02_2022R/02_2022R_axytdr.csv")
+tdr02 <- tdr %>% filter(deployID == axy$deployID[1]) %>%
+  group_by(DiveID) %>%
+  mutate(bottom = ifelse(Divephase == "B", 1, 0),
+         bottom_length = sum(bottom)) %>%
+  mutate(Shape = ifelse(bottom_length > 4, "U", "V"))
+rm(tdr)
+gc()
+invisible(gc())
+
+firstdive <- tdr02 %>% #filter(tripID == 1) %>%
+  group_by(DiveID) %>%
+  filter(bottom_length > 3) %>%
+  ungroup() %>%
+  #filter(DiveID == DiveID[1]) %>%
+  summarise(DateTime = first(DateTime))
+lastdive <- tdr02 %>% #filter(tripID == 1) %>%
+  group_by(DiveID) %>%
+  filter(bottom_length > 3) %>%
+  ungroup() %>%
+  filter(tripID == 1) %>%
+  #filter(DiveID == DiveID[1]) %>%
+  summarise(DateTime = last(DateTime),
+            diveID = last(DiveID))
+
+axy02 <- axy %>%
+  mutate(DateTime = paste(Date,Time, sep=" ")) %>% #Make DateTime column
+  mutate(DateTime = dmy_hms(DateTime)) %>%
+  filter(DateTime > firstdive$DateTime - minutes(10)) %>%
+  filter(DateTime < lastdive$DateTime + minutes(10)) %>%
+  mutate(totala = sqrt((X^2)+(Y^2)+(Z^2))) %>%
+  select(-Date, -Time)
+
+rm(axy)
 
 
+rm(axy02b)
+
+gc()
+invisible(gc())
+
+plot(axy02b$DateTime, axy02b$totala)
+head(axy$Time)
+
+#format(DateTime_int, "%d/%m/%Y %H:%M:%OS2")
+
+
+diveids <- tdr02 %>% select(DateTime, DiveID, Shape) 
+
+axydives <- axy02 %>%
+  left_join(., diveids) %>%
+  fill(DiveID, .direction = "down")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# filtering by location 
 setwd("E:/Deployments Robben 2022/02_2022R/")
 
 axy <- read.csv("02_2022R_axytdr.csv")
