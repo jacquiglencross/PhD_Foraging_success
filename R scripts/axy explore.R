@@ -12,81 +12,122 @@ invisible(gc())
 
 
 #filtering by tdr data first forage dive - 10 min
+# load all tdr data
+tdrALL <- readRDS("E:/Deployments Robben 2022/processed_data/TDR_final.RDS")
+deployIDs <- unique(tdrALL$deployID)
+#deployIDs <- deployIDs[2:26]
+for (j in deployIDs) {
+  #load individual axy file
+  axy <- read.csv(paste0("E:/Deployments Robben 2022/",j,"/",j,"_axytdr.csv"))
+  
+  # filter to the deployID of the axy
+  tdr <- tdrALL %>% filter(deployID == j) %>%
+    group_by(DiveID) %>%
+    mutate(bottom = ifelse(Divephase == "B", 1, 0),
+           bottom_length = sum(bottom)) %>%
+    mutate(Shape = ifelse(bottom_length > 4, "U", "V")) # add dive shape column based on bottom time
+  
+  #clean up
+  #rm(tdrALL)
+  gc()
+  invisible(gc())
+  
+  # identify start time of first foraging dive
+  firstdive <- tdr %>% 
+    ungroup() %>%
+    filter(Shape == "U") %>%
+    filter(tripID == 1) %>%
+    summarise(DateTime = first(DateTime),
+              diveID = first(DiveID))
+  
+  # identify end time of last foraging dive
+  lastdive <- tdr %>% 
+    ungroup() %>%
+    filter(Shape == "U") %>%
+    filter(tripID == 1) %>%
+    summarise(DateTime = last(DateTime),
+              diveID = last(DiveID))
+  
+  #subset axy data so it starts 10 minutes before the first forage dive starts
+  # and ends 10 minutes after the last dive ends
+  axy_subset <- axy %>%
+    mutate(DateTime = paste(Date,Time, sep=" ")) %>% #Make DateTime column
+    mutate(DateTime = dmy_hms(DateTime)) %>%
+    filter(DateTime > firstdive$DateTime - minutes(10)) %>%
+    filter(DateTime < lastdive$DateTime + minutes(10)) %>%
+    mutate(totala = sqrt((X^2)+(Y^2)+(Z^2))) %>%  #add a column for overall dynamic body acceleration
+    select(-Date, -Time)
+  
+  #write out subsetted axy file as csv
+  write.csv(axy_subset, paste0("E:/Chapter 4 - foraging success/axy_subset_data/", j, "_axytdr_subset.csv"))
+  
+  rm(axy, firstdive, lastdive)
+  
+  gc()
+  invisible(gc())
+  
+  
+  #create list of diveIDs
+  diveids <- tdr %>% select(DateTime, DiveID, tripID, Shape) 
+  
+  #create DiveID, tripID and dive shape columns and filter for forage dives only 
+  axydives <- axy_subset %>%
+    left_join(., diveids) %>%
+    fill(DiveID, .direction = "down") %>% #.direction = "down" fills NA values with the last non-NA value
+    fill(tripID, .direction = "down") %>%
+    fill(Shape, .direction = "down") %>%
+    filter(Shape == "U")
+  
+  
+  
+  tdrdives <- tdr %>%
+    filter(Shape == "U") %>% # forage dives only
+    filter(Divephase == "B") %>%  #only interested in the bottom segment of the dive
+    group_by(DiveID) %>% #group by diveID
+    mutate(dDepth = lag(Depth) - Depth) %>%  #calculate the chaneg in depth - 
+                                      #NOTE: this should be change in depth (m) per s, 
+                                             #but as our TDRs record once a second I've skipped a step but will add in at some point ####
+    mutate(dDepth = as.numeric(dDepth)) %>%
+    filter(!is.na(dDepth)) %>%  #remove NA values so next line works but probably need to keep them in ####
+    mutate(Wigglepos = ifelse(max(dDepth) > 0.3, TRUE, FALSE),  # wiggle defined in Sala et al 2012 is change in depth of more than 0.3m in a second
+           Wiggleneg = ifelse(min(dDepth) < -0.3, TRUE, FALSE),  # have included positive and negative values but probably should only include one or the other ####
+           Wiggle = ifelse(Wigglepos == TRUE | Wiggleneg == TRUE, TRUE, FALSE)) %>%
+    filter(Wiggle == TRUE)
+    
 
-tdr <- readRDS("E:/Deployments Robben 2022/processed_data/TDR_final.RDS")
+  foragedives <- as.data.frame(unique(ifelse(tdrdives$DiveID %in% axydives$DiveID, tdrdives$DiveID, NA))) 
+  foragedives <- foragedives[!is.na(foragedives)]
+  #i <- foragedives[1]
+  
 
-axy <- read.csv("E:/Deployments Robben 2022/02_2022R/02_2022R_axytdr.csv")
-tdr02 <- tdr %>% filter(deployID == axy$deployID[1]) %>%
-  group_by(DiveID) %>%
-  mutate(bottom = ifelse(Divephase == "B", 1, 0),
-         bottom_length = sum(bottom)) %>%
-  mutate(Shape = ifelse(bottom_length > 4, "U", "V"))
-rm(tdr)
-gc()
-invisible(gc())
+  for (i in foragedives) {
+    
+    
+    axy1dive <- axydives %>%
+      filter(DiveID == i)
+    
+    axyplot <- ggplot(data = axy1dive, aes(x = DateTime, y = totala)) +
+      geom_line()
+    
+    
+    tdr1dive <- tdrdives %>%
+      filter(DiveID == i)
+    
+    tdrplot <- ggplot(data = tdr1dive, aes(x = DateTime, y = dDepth)) +
+    geom_line() + xlim(min(axy1dive$DateTime), max(axy1dive$DateTime))
+    
+    plots <- grid.arrange(tdrplot, axyplot, ncol = 1)
+    deploy <- tdr1dive$deployID[1]
+    ggsave(plots, file=paste0("E:/Chapter 4 - foraging success/wiggleOBDA plots/",deploy,"_",i,".png"), width = 8, height = 5)
+  }
 
-firstdive <- tdr02 %>% #filter(tripID == 1) %>%
-  group_by(DiveID) %>%
-  filter(bottom_length > 3) %>%
-  ungroup() %>%
-  #filter(DiveID == DiveID[1]) %>%
-  summarise(DateTime = first(DateTime))
-lastdive <- tdr02 %>% #filter(tripID == 1) %>%
-  group_by(DiveID) %>%
-  filter(bottom_length > 3) %>%
-  ungroup() %>%
-  filter(tripID == 1) %>%
-  #filter(DiveID == DiveID[1]) %>%
-  summarise(DateTime = last(DateTime),
-            diveID = last(DiveID))
-
-axy02 <- axy %>%
-  mutate(DateTime = paste(Date,Time, sep=" ")) %>% #Make DateTime column
-  mutate(DateTime = dmy_hms(DateTime)) %>%
-  filter(DateTime > firstdive$DateTime - minutes(10)) %>%
-  filter(DateTime < lastdive$DateTime + minutes(10)) %>%
-  mutate(totala = sqrt((X^2)+(Y^2)+(Z^2))) %>%
-  select(-Date, -Time)
-
-rm(axy)
-
-
-rm(axy02b)
-
-gc()
-invisible(gc())
-
-plot(axy02b$DateTime, axy02b$totala)
-head(axy$Time)
-
-#format(DateTime_int, "%d/%m/%Y %H:%M:%OS2")
-
-
-diveids <- tdr02 %>% select(DateTime, DiveID, Shape) 
-
-axydives <- axy02 %>%
-  left_join(., diveids) %>%
-  fill(DiveID, .direction = "down")
+  rm(deploy, plots, tdrplot, tdr1dive, axyplot, axy1dive, foragedives, tdrdives, axydives, axy_subset, tdr)
+}
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# filtering by location 
+# filtering by location ####
 setwd("E:/Deployments Robben 2022/02_2022R/")
 
 axy <- read.csv("02_2022R_axytdr.csv")
