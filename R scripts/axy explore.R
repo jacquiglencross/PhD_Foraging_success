@@ -16,6 +16,8 @@ invisible(gc())
 tdrALL <- readRDS("E:/Deployments Robben 2022/processed_data/TDR_final.RDS")
 deployIDs <- unique(tdrALL$deployID)
 #deployIDs <- deployIDs[2:26]
+
+j <- deployIDs[1]
 for (j in deployIDs) {
   #load individual axy file
   axy <- read.csv(paste0("E:/Deployments Robben 2022/",j,"/",j,"_axytdr.csv"))
@@ -84,7 +86,7 @@ for (j in deployIDs) {
     filter(Shape == "U") %>% # forage dives only
     filter(Divephase == "B") %>%  #only interested in the bottom segment of the dive
     group_by(DiveID) %>% #group by diveID
-    mutate(dDepth = lag(Depth) - Depth) %>%  #calculate the chaneg in depth - 
+    mutate(dDepth = lag(Depth) - Depth) %>%  #calculate the change in depth - 
                                       #NOTE: this should be change in depth (m) per s, 
                                              #but as our TDRs record once a second I've skipped a step but will add in at some point ####
     mutate(dDepth = as.numeric(dDepth)) %>%
