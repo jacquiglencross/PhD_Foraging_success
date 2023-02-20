@@ -2,32 +2,39 @@
 
 # AXY pipeline
 rm(list = ls())
-pacman::p_load(tidyverse, dplyr, lubridate)
+pacman::p_load(tidyverse, dplyr, lubridate, here, ggExtra)
 
-metadata <- read.csv("E:/Chapter 4 - foraging success/Metadata_MASTER.csv") %>%
+metadata <- read.csv("D:/Chapter 4 - foraging success/Metadata_MASTER.csv") %>%
   filter(!is.na(AXY_filename_new))   #read in metadata and filter so only interested in deployments with axy data
 
-axydeploys <- unique(metadata$deployID)  # create a list of deploy IDs which had an axy
+deploys <- unique(metadata$deployID)  # create a list of deploy IDs which had an axy
 
-input_dir <- ("E:/Chapter 4 - foraging success/test_data/")
-output_dir <- ("E:/Chapter 4 - foraging success/processed_data/")
+input_dir <- ("D:/Chapter 4 - foraging success/test_data/")
+output_dir <- ("D:/Chapter 4 - foraging success/processed_data/")
 
+AXYTDRfiles <- fs::dir_ls(input_dir, glob = "*_axytdr*.csv", type="file", recurse = TRUE) # list location all files with "tdr" in the name
+AXYTDRdeploys <- as.data.frame(AXYTDRfiles) %>%
+  mutate(filename = (basename(AXYTDRfiles))) %>% #strip out the filename by removing path prefix
+  mutate(deployID = (str_replace(filename,"_axytdr", replacement=""))) %>% #extract birdID by removing axytdr from filename
+  mutate(deployID = (tools::file_path_sans_ext(deployID))) #and remove file suffix
+
+#for the purpose of the test <- subset so we have a list of deployIDs that match the ones in the test folder
+axydeploys <-  as.data.frame(deploys) %>% filter(deploys %in% AXYTDRdeploys$deployID)
+axydeploys <- axydeploys$deploys
 
 tdrALL <- readRDS(here(output_dir, ("TDR_final.RDS")))
 
 templist = list()  # create templist
 
-i<- axydeploys[4]
-#for (i in axydeploys) {    # start loop
+#i<- axydeploys[1]
+for (i in axydeploys) {    # start loop
+
   
-  
-## need to sort out time - currently reading in %M:%OS and ignoring hours
+## need to sort out time for 2017 data - currently reading in %M:%OS and ignoring hours
   axy <- read.csv(paste0(input_dir,i,"_axytdr.csv")) %>%   # read in axy data
-    #mutate(Time1 = strptime(DateTime, format("%d/%m/%Y %H:%M:%OS")))# %>%
-    mutate(DateTime = paste(Date,Time, sep=" ")) %>% #Make DateTime column
-    mutate(DateTime = dmy_hms(DateTime)) %>%
-    #mutate(Time1 = strptime(DateTime, format = "%d/%m/%Y %H:%M:%OS"))# %>%
-    dplyr::select(DateTime, X, Y, Z, Date, Time) %>%
+    mutate(DateTimeOS = paste(Date,Time, sep=" ")) %>% #Make DateTime column
+    mutate(DateTime = dmy_hms(DateTimeOS)) %>% 
+    dplyr::select(DateTime, X, Y, Z, Date, Time, DateTimeOS) %>%
     mutate(deployID = i) #and remove file suffix
   
   tdr <- tdrALL %>% 
@@ -35,7 +42,8 @@ i<- axydeploys[4]
     group_by(DiveID) %>%
     mutate(bottom = ifelse(Divephase == "B", 1, 0),
            bottom_length = sum(bottom)) %>%
-    mutate(Shape = ifelse(bottom_length > 4, "U", "V")) # add dive shape column based on bottom time
+    mutate(Shape = ifelse(bottom_length > 4, "U", "V"))  # add dive shape column based on bottom time
+
 
   
   # identify start time of first foraging dive
@@ -58,13 +66,59 @@ i<- axydeploys[4]
   # and ends 10 minutes after the last dive ends
   axy_subset <- axy %>%
     filter(DateTime > firstdive$DateTime - minutes(10)) %>%
-    filter(DateTime < lastdive$DateTime + minutes(10)) %>%
+    filter(DateTime < lastdive$DateTime + minutes(10)) 
+
+  axytdr <- axy_subset %>%
+    left_join(., tdr) %>%
+    dplyr::select(-c(Temp, Pressureformat, TDR_tag, bottom, bottom_length)) %>%
+    fill(DiveID, .direction = "down") %>%
+    fill(Shape, .direction = "down") %>%
+    fill(Divephase, .direction = "down")
+
+  diveIDs <-  axytdr %>%
+    filter(DiveID > 0) %>%
+    filter(!is.na(DiveID)) %>%
+    filter(Shape == "U")
+    
+  diveIDlist <- unique(diveIDs$DiveID)
+  
+  templist1 = list()
+  #j <- diveIDlist[1]
+  
+  
+  for (j in diveIDlist) { 
+  
+  axytdr_j <- axytdr %>% filter(DiveID == j)  #subset df to look at diveID j
+  
+  divestart <- axytdr_j %>%    
+    summarise(DateTime = first(DateTime),    #when does dive j start
+              diveID = first(DiveID))
+ 
+  
+   diveend <- axytdr_j %>% 
+    summarise(DateTime = last(DateTime),    #when does dive j end
+              diveID = last(DiveID))
+  
+   axytdr_dive <- axytdr %>%            # subset df to only look at diveID j with buffer
+    filter(DateTime > divestart$DateTime - seconds(5)) %>%   # 5 second buffer before
+    filter(DateTime < diveend$DateTime + seconds(5)) %>%   # 5 second buffer after
+    mutate(DiveID_new = j) %>%
     mutate(totala = sqrt((X^2)+(Y^2)+(Z^2)))  #add a column for overall dynamic body acceleration
-
   
+   templist1[[j]] <- axytdr_dive  
+   
+   rm(axytdr_j, divestart, diveend, axytdr_dive)
   
-#}
+  }
 
+  templist[[i]] <- data.table::rbindlist(templist1) 
+
+finalaxytdr<- data.table::rbindlist(templist)
+
+rm(axy, tdr, firstdive, lastdive, axy_subset, axytdr, diveIDs, diveIDlist)
+}
+
+saveRDS(finalaxytdr, file=(file.path(output_dir,(paste0("AXYTDR18_test",".RDS"))))) #Save as an RDS object (load this later with 'readRDS' function)
 
 
 
@@ -98,4 +152,49 @@ i<- axydeploys[4]
 # read in metadata
 # columns: deployID, diveID, DateTime, OBDA, Sex
 
+
+
+## Some exploratory plots
+
+test <- finalaxytdr %>%
+  fill(Divephase, .direction = "down") 
+
+testtdr <- test %>%
+  filter(!is.na(Calibrated_depth)) %>%
+  mutate(dDepth = lag(Calibrated_depth) - Calibrated_depth) %>%  #calculate the change in depth - 
+  #NOTE: this should be change in depth (m) per s, 
+  #but as our TDRs record once a second I've skipped a step but will add in at some point ####
+mutate(dDepth = as.numeric(dDepth)) %>%
+  filter(!is.na(dDepth)) %>%  #remove NA values so next line works but probably need to keep them in ####
+mutate(Wigglepos = ifelse(max(dDepth) > 0.3, TRUE, FALSE),  # wiggle defined in Sala et al 2012 is change in depth of more than 0.3m in a second
+       Wiggleneg = ifelse(min(dDepth) < -0.3, TRUE, FALSE),  # have included positive and negative values but probably should only include one or the other ####
+       Wiggle = ifelse(Wigglepos == TRUE | Wiggleneg == TRUE, TRUE, FALSE)) %>%
+  filter(Wiggle == TRUE)
+
+test1 <- test %>%
+  filter(deployID == "01_2018R") %>%
+  filter(DiveID == 111)
+
+summary(finalaxytdr)
+
+ggplot(data = testtdr) +
+  geom_histogram(aes(x = dDepth)) + geom_vline(aes(xintercept = 0.3), col = "blue") +
+  geom_vline(aes(xintercept = -0.3), col = "blue") + 
+  facet_wrap(~ Divephase, ncol = 2) + theme_classic() #+ scale_y_log10()
+
+
+ggplot(data = test) +
+  geom_histogram(aes(x = totala)) + geom_vline(aes(xintercept = 2), col = "blue") +
+  facet_wrap(~ Divephase, ncol = 2) + theme_classic() + scale_y_log10()
+
+axyplot <- ggplot(data = test1) +
+  geom_line(aes(x = DateTime, y = log(totala))) +
+  #facet_wrap(~ Divephase, ncol = 1) + 
+  theme_classic()
+tdrplot <- ggplot(data = test1) +
+  geom_point(aes(x = DateTime, y = -Calibrated_depth)) +
+  #facet_wrap(~ Divephase, ncol = 1) + 
+  theme_classic()
+
+gridExtra::grid.arrange(tdrplot, axyplot, ncol = 1)
 
