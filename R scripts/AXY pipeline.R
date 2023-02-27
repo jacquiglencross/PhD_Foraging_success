@@ -26,7 +26,7 @@ tdrALL <- readRDS(here(output_dir, ("TDR_final.RDS")))
 
 templist = list()  # create templist
 
-#i<- axydeploys[1]
+i<- axydeploys[1]
 for (i in axydeploys) {    # start loop
 
   
