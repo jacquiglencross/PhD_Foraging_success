@@ -130,10 +130,10 @@ for (j in deployIDs) {
 
 
 # filtering by location ####
-setwd("E:/Deployments Robben 2022/02_2022R/")
+setwd("D:/raw_penguin/Robben/AXY_Raw/2017R_AXY_Raw")
 
-axy <- read.csv("02_2022R_axytdr.csv")
-
+axy <- read.csv("04_2017R_axytdr.csv")
+head(axy)
 gps <- read.csv("02_2022R_gps.csv")
 
 # Read in a map files of islands (including a buffer to account for inaccuracy in gps devices
