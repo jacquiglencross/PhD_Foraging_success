@@ -1,6 +1,6 @@
-setwd("D:/raw_penguin/Robben/AXY_Raw/2017R_AXY_Raw")
+setwd("E:/raw_penguin/Robben/AXY_Raw/2017R_AXY_Raw")
 
-df <- read.csv("C:/Users/jg287/Downloads/AP_RI_D1_EW079-17_08062017_RI01_S1.csv")
+#df <- read.csv("C:/Users/jg287/Downloads/AP_RI_D1_EW079-17_08062017_RI01_S1.csv")
 
 # sort time column ####
 decisecs <- seq(0.00, 0.08, by = 0.02)
@@ -13,15 +13,17 @@ axy <- read.csv(paste0("01_2017R_axytdr.csv")) %>%   # read in axy data
   #mutate(DateTimeOS = paste(Date,Time, sep=" ")) %>% #Make DateTime column
   #mutate(DateTime = dmy_hms(DateTimeOS)) %>% 
   dplyr::select(X, Y, Z, Date, Time, TagID) %>%#, DateTime,  DateTimeOS)
-  mutate(deployID = i) #and remove file suffix
+  mutate(deployID = i)  #and remove file suffix
 
-setwd("D:/raw_penguin/Robben/TDR_Raw/2017R_TDR_Raw")
-tdr <- read.csv(paste0("01_2017R_tdr.csv")) %>%
+
+
+tdr <- read.csv(paste0("E:/raw_penguin/Robben/TDR_Raw/2017R_TDR_Raw/01_2017R_tdr.csv")) %>%
   mutate(Date = as.POSIXct(Date, format ="%d/%m/%Y")) %>%
   mutate(deployID = i,
-         hour = format(strptime(Time, "%H:%M:%S"),"%H"),
+         hour = as.character(format(strptime(Time, "%H:%M:%S"),"%H")),
          minsec = format(strptime(Time, "%H:%M:%S"),"%M:%S")) %>%
-  select(-Pressure, -Temp, -Time)
+  rename(., "Timetdr" = "Time") %>%
+  select(-Pressure, -Temp)
 
 
 #metadata <- read.csv("D:/Chapter 4 - foraging success/Metadata_MASTER.csv")%>%
@@ -43,9 +45,10 @@ axy1 <- axy %>%
   mutate(Date = as.POSIXct(Date, format ="%d/%m/%Y")) %>% 
   mutate(Time1 = paste(00, Time, sep=":")) %>%  
   mutate(minsec = format(strptime(Time1, "%H:%M:%S"),"%M:%S")) %>%
+  merge(x=.,y=tdr,by=c("minsec", "Date"),all.x=TRUE)
   left_join(., tdr)
 
-
+head(axy1)
 
   mutate(DateTime = as.POSIXct(paste(Date,Time1))) %>%
   mutate(newhour = ifelse(DateTime == newhour, TRUE, FALSE)) %>%
