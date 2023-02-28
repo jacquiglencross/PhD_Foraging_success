@@ -10,7 +10,7 @@ metadata <- read.csv("D:/Chapter 4 - foraging success/Metadata_MASTER.csv") %>%
 deploys <- unique(metadata$deployID)  # create a list of deploy IDs which had an axy
 
 input_dir <- ("D:/Chapter 4 - foraging success/test_data/")
-output_dir <- ("E:/Chapter 4 - foraging success/processed_data/")
+output_dir <- ("D:/Chapter 4 - foraging success/processed_data/")
 
 AXYTDRfiles <- fs::dir_ls(input_dir, glob = "*_axytdr*.csv", type="file", recurse = TRUE) # list location all files with "tdr" in the name
 AXYTDRdeploys <- as.data.frame(AXYTDRfiles) %>%
