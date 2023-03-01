@@ -59,14 +59,15 @@ axy1 <- axy %>%
   mutate(NewTime = ifelse(rownum == 1 , starttime, NA),
          NewTime = hms(NewTime)) 
 axy2 <- axy1[1:100,]
-
+axy2$NewTime = as.vector(axy2$NewTime)
+tmediff <- as.vector(seconds(0.02))
 testing <- axy2 %>%
-   mutate(NewTime1 = accumulate(NewTime, ~ .x + seconds(0.02))) #accumulate is the function from purrr
+   mutate(NewTime1 = accumulate(NewTime, ~ .x + tmediff)) #accumulate is the function from purrr
 
 
 str(axy2$NewTime)
 
-axy2$NewTime1 = vector(mode = "numeric", length = length(axy2$NewTime))
+
 axy2$NewTime1[1] = axy2$NewTime[1]
 for(idx in 2:length(axy2$NewTime)) {
   axy2$NewTime1[idx] = axy2$NewTime1[idx - 1] + seconds(0.02)
