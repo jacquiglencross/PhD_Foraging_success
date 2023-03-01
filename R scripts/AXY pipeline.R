@@ -26,7 +26,7 @@ axydeploys <- axydeploys$deploys
 rm(AXYTDRdeploys, AXYTDRfiles, metadata, deploys)
 templist = list()  # create templist
 
-i<- axydeploys[1]
+i<- axydeploys[2]
 for (i in axydeploys) {    # start loop
 
   
@@ -69,8 +69,9 @@ for (i in axydeploys) {    # start loop
     filter(DateTime < lastdive$DateTime + minutes(10)) %>%
     select(-DateTime, - Date, -Time)
   
-  write.csv(axy_subset, paste(csv_dir, i, "axy_subset.csv"))
   rm(axy, firstdive, lastdive)
+  write.csv(axy_subset, paste(csv_dir, i, "axy_subset.csv"))
+  
   gc()
   invisible(gc())
   
