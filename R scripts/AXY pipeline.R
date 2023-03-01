@@ -23,8 +23,7 @@ AXYTDRdeploys <- as.data.frame(AXYTDRfiles) %>%
 axydeploys <-  as.data.frame(deploys) %>% filter(deploys %in% AXYTDRdeploys$deployID)
 axydeploys <- axydeploys$deploys
 
-tdrALL <- readRDS(here(output_dir, ("TDR_final.RDS")))
-
+rm(AXYTDRdeploys, AXYTDRfiles, metadata, deploys)
 templist = list()  # create templist
 
 i<- axydeploys[1]
@@ -37,8 +36,8 @@ for (i in axydeploys) {    # start loop
     mutate(DateTime = dmy_hms(DateTimeOS)) %>% 
     dplyr::select(DateTime, X, Y, Z, Date, Time, DateTimeOS) %>%
     mutate(deployID = i) #and remove file suffix
-  
-  tdr <- tdrALL %>% 
+
+  tdr <-  readRDS(here(output_dir, ("TDR_final.RDS"))) %>% 
     filter(deployID == i) %>%
     group_by(DiveID) %>%
     mutate(bottom = ifelse(Divephase == "B", 1, 0),
@@ -67,16 +66,26 @@ for (i in axydeploys) {    # start loop
   # and ends 10 minutes after the last dive ends
   axy_subset <- axy %>%
     filter(DateTime > firstdive$DateTime - minutes(10)) %>%
-    filter(DateTime < lastdive$DateTime + minutes(10)) 
-
+    filter(DateTime < lastdive$DateTime + minutes(10)) %>%
+    select(-DateTime, - Date, -Time)
+  
+  write.csv(axy_subset, paste(csv_dir, i, "axy_subset.csv"))
+  rm(axy, firstdive, lastdive)
+  gc()
+  invisible(gc())
+  
+  tdrsmall <- tdr %>%
+    dplyr::select(-c(Temp, Pressureformat, TDR_tag, bottom, bottom_length)) 
+  rm(tdr)
+  
+  future::plan(multisession, workers = 7) #get ready to run in multiple sessions (this might slow down your computer so close background apps beforehand)
+  
   axytdr <- axy_subset %>%
-    left_join(., tdr) %>%
-    dplyr::select(-c(Temp, Pressureformat, TDR_tag, bottom, bottom_length)) %>%
+    left_join(., tdrsmall) %>%
     fill(DiveID, .direction = "down") %>%
     fill(Shape, .direction = "down") %>%
     fill(Divephase, .direction = "down")
 
-  write.csv(axytdr, paste(csv_dir, i, "axy_subset.csv"))
   
   diveIDs <-  axytdr %>%
     filter(DiveID > 0) %>%
