@@ -4,14 +4,14 @@
 rm(list = ls())
 pacman::p_load(tidyverse, dplyr, lubridate, here, ggExtra)
 
-metadata <- read.csv("D:/Chapter 4 - foraging success/Metadata_MASTER.csv") %>%
+metadata <- read.csv("E:/Chapter 4 - foraging success/Metadata_MASTER.csv") %>%
   filter(!is.na(AXY_filename_new))   #read in metadata and filter so only interested in deployments with axy data
 
 deploys <- unique(metadata$deployID)  # create a list of deploy IDs which had an axy
 
-input_dir <- ("D:/raw_penguin/Robben/AXY_Raw/2018R_AXY_Raw/")
-csv_dir <- ("D:/raw_penguin/Robben/AXY_Subset/2018R_AXY_subset/")
-output_dir <- ("D:/Chapter 4 - foraging success/processed_data/")
+input_dir <- ("E:/raw_penguin/Robben/AXY_Raw/2017R_AXY_Rawnew/")
+csv_dir <- ("E:/raw_penguin/Robben/AXY_Subset/2017R_AXY_subset/")
+output_dir <- ("E:/Chapter 4 - foraging success/processed_data/")
 
 AXYTDRfiles <- fs::dir_ls(input_dir, glob = "*_axytdr*.csv", type="file", recurse = TRUE) # list location all files with "tdr" in the name
 AXYTDRdeploys <- as.data.frame(AXYTDRfiles) %>%
@@ -23,28 +23,32 @@ AXYTDRdeploys <- as.data.frame(AXYTDRfiles) %>%
 axydeploys <-  as.data.frame(deploys) %>% filter(deploys %in% AXYTDRdeploys$deployID)
 axydeploys <- axydeploys$deploys
 
-rm(AXYTDRdeploys, AXYTDRfiles, metadata, deploys)
-templist = list()  # create templist
+#axydeploys1 <- axydeploys[axydeploys != "05_2018R"]
+#axydeploys1 <- axydeploys1[-c(1,2,3,4)]
 
-i<- axydeploys[2]
+#rm(AXYTDRdeploys, AXYTDRfiles, metadata, deploys)
+
+
+# shorten axy #### 
+
 for (i in axydeploys) {    # start loop
-
   
-## need to sort out time for 2017 data - currently reading in %M:%OS and ignoring hours
+  
+  ## need to sort out time for 2017 data - currently reading in %M:%OS and ignoring hours
   axy <- read.csv(paste0(input_dir,i,"_axytdr.csv")) %>%   # read in axy data
     mutate(DateTimeOS = paste(Date,Time, sep=" ")) %>% #Make DateTime column
     mutate(DateTime = dmy_hms(DateTimeOS)) %>% 
     dplyr::select(DateTime, X, Y, Z, Date, Time, DateTimeOS) %>%
     mutate(deployID = i) #and remove file suffix
-
+  
   tdr <-  readRDS(here(output_dir, ("TDR_final.RDS"))) %>% 
     filter(deployID == i) %>%
     group_by(DiveID) %>%
     mutate(bottom = ifelse(Divephase == "B", 1, 0),
            bottom_length = sum(bottom)) %>%
     mutate(Shape = ifelse(bottom_length > 4, "U", "V"))  # add dive shape column based on bottom time
-
-
+  
+  
   
   # identify start time of first foraging dive
   firstdive <- tdr %>% 
@@ -69,9 +73,31 @@ for (i in axydeploys) {    # start loop
     filter(DateTime < lastdive$DateTime + minutes(10)) %>%
     select(-DateTime, - Date, -Time)
   
-  rm(axy, firstdive, lastdive)
-  write.csv(axy_subset, paste(csv_dir, i, "axy_subset.csv"))
+  rm(axy, tdr, firstdive, lastdive)
+
   
+  write.csv(axy_subset, paste(csv_dir, i, "axy_subset.csv")) 
+  
+rm(axy_subset)
+  
+}
+
+templist = list()  # create templist
+#i<- axydeploys[2]
+for (i in axydeploys) {    # start loop
+
+  
+## need to sort out time for 2017 data - currently reading in %M:%OS and ignoring hours
+  axy_subset <- read.csv(paste0(csv_dir,i,"_axytdr.csv")) 
+
+  tdr <-  readRDS(here(output_dir, ("TDR_final.RDS"))) %>% 
+    filter(deployID == i) %>%
+    group_by(DiveID) %>%
+    mutate(bottom = ifelse(Divephase == "B", 1, 0),
+           bottom_length = sum(bottom)) %>%
+    mutate(Shape = ifelse(bottom_length > 4, "U", "V"))  # add dive shape column based on bottom time
+
+
   gc()
   invisible(gc())
   
@@ -210,4 +236,9 @@ tdrplot <- ggplot(data = test1) +
   theme_classic()
 
 gridExtra::grid.arrange(tdrplot, axyplot, ncol = 1)
+
+
+
+
+
 
