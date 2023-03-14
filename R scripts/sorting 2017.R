@@ -6,7 +6,7 @@ pacman::p_load(tidyverse, dplyr, lubridate, stringr, purrr, #tidyr
                here, beepr) #other useful packages 
 
 
-setwd("D:/raw_penguin/Robben/AXY_Raw/2017R_AXY_Raw")
+setwd("E:/raw_penguin/Robben/AXY_Raw/2018R_AXY_Raw")
 
 #df <- read.csv("C:/Users/jg287/Downloads/AP_RI_D1_EW079-17_08062017_RI01_S1.csv")
 
@@ -101,9 +101,9 @@ write.csv(axy1, file = "D:/raw_penguin/Robben/AXY_Raw/2017R_AXY_Rawnew/01_2017R_
 
 
 #split columns ####
-axy <- read.csv("02_2017R_axytdr.csv", sep = "",  head = T) %>% #skip = 1,, col.names = columns
-  select(-level)
+axy <- read.csv("07_2018R_axytdr.csv", sep = "",  head = T) %>% #skip = 1,, col.names = columns
+ select(-level)
 head(axy)
 
-write.csv(axy, file = "D:/raw_penguin/Robben/AXY_Raw/2017R_AXY_Rawnew/02_2017R_axytdr.csv")
+write.csv(axy, file = "E:/raw_penguin/Robben/AXY_Raw/2018R_AXY_Raw/07_2018R_axytdr.csv")
 rm(axy)
