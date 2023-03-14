@@ -9,8 +9,8 @@ metadata <- read.csv("E:/Chapter 4 - foraging success/Metadata_MASTER.csv") %>%
 
 deploys <- unique(metadata$deployID)  # create a list of deploy IDs which had an axy
 
-input_dir <- ("E:/raw_penguin/Robben/AXY_Raw/2017R_AXY_Rawnew/")
-csv_dir <- ("E:/raw_penguin/Robben/AXY_Subset/2017R_AXY_subset/")
+input_dir <- ("E:/raw_penguin/Robben/AXY_Raw/2022R_AXY_Raw/")
+csv_dir <- ("E:/raw_penguin/Robben/AXY_Subset/2022R_AXY_subset/")
 output_dir <- ("E:/Chapter 4 - foraging success/processed_data/")
 
 AXYTDRfiles <- fs::dir_ls(input_dir, glob = "*_axytdr*.csv", type="file", recurse = TRUE) # list location all files with "tdr" in the name
@@ -24,7 +24,7 @@ axydeploys <-  as.data.frame(deploys) %>% filter(deploys %in% AXYTDRdeploys$depl
 axydeploys <- axydeploys$deploys
 
 #axydeploys1 <- axydeploys[axydeploys != "05_2018R"]
-#axydeploys1 <- axydeploys1[-c(1,2,3,4)]
+axydeploys <- axydeploys[-c(1,2,3,4)]
 
 #rm(AXYTDRdeploys, AXYTDRfiles, metadata, deploys)
 
