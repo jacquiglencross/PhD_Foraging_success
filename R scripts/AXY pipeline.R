@@ -9,8 +9,8 @@ metadata <- read.csv("E:/Chapter 4 - foraging success/Metadata_MASTER.csv") %>%
 
 deploys <- unique(metadata$deployID)  # create a list of deploy IDs which had an axy
 
-input_dir <- ("E:/raw_penguin/Robben/AXY_Raw/2022R_AXY_Raw/")
-csv_dir <- ("E:/raw_penguin/Robben/AXY_Subset/2022R_AXY_subset/")
+input_dir <- ("E:/raw_penguin/Robben/AXY_Raw/")
+csv_dir <- ("E:/raw_penguin/Robben/AXY_Subset/")
 output_dir <- ("E:/Chapter 4 - foraging success/processed_data/")
 
 AXYTDRfiles <- fs::dir_ls(input_dir, glob = "*_axytdr*.csv", type="file", recurse = TRUE) # list location all files with "tdr" in the name
@@ -22,20 +22,21 @@ AXYTDRdeploys <- as.data.frame(AXYTDRfiles) %>%
 #for the purpose of the test <- subset so we have a list of deployIDs that match the ones in the test folder
 axydeploys <-  as.data.frame(deploys) %>% filter(deploys %in% AXYTDRdeploys$deployID)
 axydeploys <- axydeploys$deploys
+axydeploys <- axydeploys[axydeploys != "06_2022R"]
 
 #axydeploys1 <- axydeploys[axydeploys != "05_2018R"]
-axydeploys <- axydeploys[-c(1,2,3,4)]
+axydeploys <- axydeploys[-c(1,2,3)]
 
 #rm(AXYTDRdeploys, AXYTDRfiles, metadata, deploys)
 
 
 # shorten axy #### 
-
+i = axydeploys[1]
 for (i in axydeploys) {    # start loop
   
-  
+  filename = AXYTDRdeploys$AXYTDRfiles[AXYTDRdeploys$deployID == i]
   ## need to sort out time for 2017 data - currently reading in %M:%OS and ignoring hours
-  axy <- read.csv(paste0(input_dir,i,"_axytdr.csv")) %>%   # read in axy data
+  axy <- read.csv(filename) %>%   # read in axy data
     mutate(DateTimeOS = paste(Date,Time, sep=" ")) %>% #Make DateTime column
     mutate(DateTime = dmy_hms(DateTimeOS)) %>% 
     dplyr::select(DateTime, X, Y, Z, Date, Time, DateTimeOS) %>%
@@ -76,19 +77,41 @@ for (i in axydeploys) {    # start loop
   rm(axy, tdr, firstdive, lastdive)
 
   
-  write.csv(axy_subset, paste(csv_dir, i, "axy_subset.csv")) 
+  write.csv(axy_subset, paste(csv_dir,i,"axy_subset.csv")) 
   
 rm(axy_subset)
   
 }
 
+
+
 templist = list()  # create templist
-#i<- axydeploys[2]
+
+csv_dir <- ("E:/raw_penguin/Robben/AXY_Subset/")
+output_dir <- ("E:/Chapter 4 - foraging success/processed_data/")
+
+metadata <- read.csv("E:/Chapter 4 - foraging success/Metadata_MASTER.csv") %>%
+  filter(!is.na(AXY_filename_new))   #read in metadata and filter so only interested in deployments with axy data
+
+deploys <- unique(metadata$deployID)  # create a list of deploy IDs which had an axy
+
+AXYTDRfiles <- fs::dir_ls(csv_dir, glob = "*axy_subset*.csv", type="file", recurse = TRUE) # list location all files with "tdr" in the name
+AXYTDRdeploys <- as.data.frame(AXYTDRfiles) %>%
+  mutate(filename = (basename(AXYTDRfiles))) %>% #strip out the filename by removing path prefix
+  mutate(deployID = (str_replace(filename,"axy_subset", replacement=""))) %>% #extract birdID by removing axytdr from filename
+  mutate(deployID = (tools::file_path_sans_ext(deployID))) %>% #and remove file suffix
+  mutate(deployID = str_trim(deployID))
+
+#for the purpose of the test <- subset so we have a list of deployIDs that match the ones in the test folder
+axydeploys <-  as.data.frame(deploys) %>% filter(deploys %in% AXYTDRdeploys$deployID)
+axydeploys <- axydeploys$deploys
+
+i = axydeploys[1]
 for (i in axydeploys) {    # start loop
 
   
-## need to sort out time for 2017 data - currently reading in %M:%OS and ignoring hours
-  axy_subset <- read.csv(paste0(csv_dir,i,"_axytdr.csv")) 
+
+  axy_subset <- read.csv(paste0(csv_dir," ",i," axy_subset.csv")) 
 
   tdr <-  readRDS(here(output_dir, ("TDR_final.RDS"))) %>% 
     filter(deployID == i) %>%
@@ -105,9 +128,10 @@ for (i in axydeploys) {    # start loop
     dplyr::select(-c(Temp, Pressureformat, TDR_tag, bottom, bottom_length)) 
   rm(tdr)
   
-  future::plan(multisession, workers = 7) #get ready to run in multiple sessions (this might slow down your computer so close background apps beforehand)
+  #future::plan(multisession, workers = 7) #get ready to run in multiple sessions (this might slow down your computer so close background apps beforehand)
   
   axytdr <- axy_subset %>%
+    select(-1) %>%
     left_join(., tdrsmall) %>%
     fill(DiveID, .direction = "down") %>%
     fill(Shape, .direction = "down") %>%
