@@ -22,10 +22,10 @@ AXYTDRdeploys <- as.data.frame(AXYTDRfiles) %>%
 #for the purpose of the test <- subset so we have a list of deployIDs that match the ones in the test folder
 axydeploys <-  as.data.frame(deploys) %>% filter(deploys %in% AXYTDRdeploys$deployID)
 axydeploys <- axydeploys$deploys
-axydeploys <- axydeploys[axydeploys != "06_2022R"]
+#axydeploys <- axydeploys[axydeploys != "06_2022R"]
 
 #axydeploys1 <- axydeploys[axydeploys != "05_2018R"]
-axydeploys <- axydeploys[-c(1,2,3)]
+#axydeploys <- axydeploys[-c(1,2,3)]
 
 #rm(AXYTDRdeploys, AXYTDRfiles, metadata, deploys)
 
@@ -83,11 +83,11 @@ rm(axy_subset)
   
 }
 
-
+#######
 
 templist = list()  # create templist
 
-csv_dir <- ("E:/raw_penguin/Robben/AXY_Subset/")
+csv_dir <- ("E:/raw_penguin/Robben/AXY_Raw/")
 output_dir <- ("E:/Chapter 4 - foraging success/processed_data/")
 
 metadata <- read.csv("E:/Chapter 4 - foraging success/Metadata_MASTER.csv") %>%
@@ -95,10 +95,10 @@ metadata <- read.csv("E:/Chapter 4 - foraging success/Metadata_MASTER.csv") %>%
 
 deploys <- unique(metadata$deployID)  # create a list of deploy IDs which had an axy
 
-AXYTDRfiles <- fs::dir_ls(csv_dir, glob = "*axy_subset*.csv", type="file", recurse = TRUE) # list location all files with "tdr" in the name
+AXYTDRfiles <- fs::dir_ls(csv_dir, glob = "*_axytdr*.csv", type="file", recurse = TRUE) # list location all files with "tdr" in the name
 AXYTDRdeploys <- as.data.frame(AXYTDRfiles) %>%
   mutate(filename = (basename(AXYTDRfiles))) %>% #strip out the filename by removing path prefix
-  mutate(deployID = (str_replace(filename,"axy_subset", replacement=""))) %>% #extract birdID by removing axytdr from filename
+  mutate(deployID = (str_replace(filename,"_axytdr", replacement=""))) %>% #extract birdID by removing axytdr from filename
   mutate(deployID = (tools::file_path_sans_ext(deployID))) %>% #and remove file suffix
   mutate(deployID = str_trim(deployID))
 
@@ -106,29 +106,64 @@ AXYTDRdeploys <- as.data.frame(AXYTDRfiles) %>%
 axydeploys <-  as.data.frame(deploys) %>% filter(deploys %in% AXYTDRdeploys$deployID)
 axydeploys <- axydeploys$deploys
 
-i = axydeploys[1]
+i = "05_2019R"
 for (i in axydeploys) {    # start loop
 
+  filename = AXYTDRdeploys$AXYTDRfiles[AXYTDRdeploys$deployID == i]
+  ## need to sort out time for 2017 data - currently reading in %M:%OS and ignoring hours
+  axy <- read.csv(filename) %>%   # read in axy data
+    mutate(DateTimeOS = paste(Date,Time, sep=" ")) %>% #Make DateTime column
+    mutate(DateTime = dmy_hms(DateTimeOS)) %>% 
+    dplyr::select(DateTime, X, Y, Z, Date, Time, DateTimeOS) %>%
+    mutate(deployID = i) #and remove file suffix
   
-
-  axy_subset <- read.csv(paste0(csv_dir," ",i," axy_subset.csv")) 
-
   tdr <-  readRDS(here(output_dir, ("TDR_final.RDS"))) %>% 
     filter(deployID == i) %>%
     group_by(DiveID) %>%
     mutate(bottom = ifelse(Divephase == "B", 1, 0),
            bottom_length = sum(bottom)) %>%
     mutate(Shape = ifelse(bottom_length > 4, "U", "V"))  # add dive shape column based on bottom time
+  
+  
+  
+  # identify start time of first foraging dive
+  firstdive <- tdr %>% 
+    ungroup() %>%
+    filter(Shape == "U") %>%
+    filter(tripID == 1) %>%
+    summarise(DateTime = first(DateTime),
+              diveID = first(DiveID))
+  
+  # identify end time of last foraging dive
+  lastdive <- tdr %>% 
+    ungroup() %>%
+    filter(Shape == "U") %>%
+    filter(tripID == 1) %>%
+    summarise(DateTime = last(DateTime),
+              diveID = last(DiveID))
+  
+  #subset axy data so it starts 10 minutes before the first forage dive starts
+  # and ends 10 minutes after the last dive ends
+  axy_subset <- axy %>%
+    filter(DateTime > firstdive$DateTime - seconds(30)) %>%
+    filter(DateTime < lastdive$DateTime + seconds(30)) %>%
+    select(-DateTime, - Date, -Time) %>%
+    mutate(totala = sqrt((X^2)+(Y^2)+(Z^2))) %>%
+    select(-X,-Y,-Z)
+    
 
+    tdrsmall <- tdr %>%
+    dplyr::select(-c(Temp, Pressureformat, TDR_tag, bottom, bottom_length)) 
+ 
+  rm(axy, tdr, firstdive, lastdive)
+  
 
   gc()
   invisible(gc())
   
-  tdrsmall <- tdr %>%
-    dplyr::select(-c(Temp, Pressureformat, TDR_tag, bottom, bottom_length)) 
-  rm(tdr)
+
   
-  #future::plan(multisession, workers = 7) #get ready to run in multiple sessions (this might slow down your computer so close background apps beforehand)
+#future::plan(multisession, workers = 7) #get ready to run in multiple sessions (this might slow down your computer so close background apps beforehand)
   
   axytdr <- axy_subset %>%
     select(-1) %>%
@@ -166,7 +201,7 @@ for (i in axydeploys) {    # start loop
     filter(DateTime > divestart$DateTime - seconds(5)) %>%   # 5 second buffer before
     filter(DateTime < diveend$DateTime + seconds(5)) %>%   # 5 second buffer after
     mutate(DiveID_new = j) %>%
-    mutate(totala = sqrt((X^2)+(Y^2)+(Z^2)))  #add a column for overall dynamic body acceleration
+     #add a column for overall dynamic body acceleration
   
    templist1[[j]] <- axytdr_dive  
    
