@@ -22,7 +22,7 @@ axydeploys <- axydeploys$deploys
 axydeploys <- axydeploys[-c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15)]
 tdrALL <- readRDS(here(output_dir, ("TDR_final.RDS")))
 
-templist = list()  # create templist
+#templist = list()  # create templist
 
 #i<- axydeploys[1]
 for (i in axydeploys) {    # start loop
@@ -106,20 +106,27 @@ for (i in axydeploys) {    # start loop
       mutate_at(c('X', 'Y', 'Z'), as.numeric) %>%
       mutate(totala = sqrt((X^2)+(Y^2)+(Z^2)))  #add a column for overall dynamic body acceleration
     
+    # add in wiggles here
+    
+    
     templist1[[j]] <- axytdr_dive  
     
     rm(axytdr_j, divestart, diveend, axytdr_dive)
     
   }
+  # spit out a csv file for each individual  
+axytdr1 <- data.table::rbindlist(templist1) 
   
-  templist[[i]] <- data.table::rbindlist(templist1) 
+ # templist[[i]] <- data.table::rbindlist(templist1) 
   
-  finalaxytdr<- data.table::rbindlist(templist)
+ # finalaxytdr<- data.table::rbindlist(templist)
+  
+
   
   rm(axy, tdr, firstdive, lastdive, axy_subset, axytdr, diveIDs, diveIDlist)
 }
 
-saveRDS(finalaxytdr, file=(file.path(output_dir,(paste0("AXYTDRdives",".RDS"))))) #Save as an RDS object (load this later with 'readRDS' function)
+#saveRDS(finalaxytdr, file=(file.path(output_dir,(paste0("AXYTDRdives",".RDS"))))) #Save as an RDS object (load this later with 'readRDS' function)
 
 
 
