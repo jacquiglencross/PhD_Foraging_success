@@ -1,16 +1,25 @@
 # AXY pipeline
-rm(list = ls())
-pacman::p_load(tidyverse, dplyr, lubridate, here, ggExtra)
 
-metadata <- read.csv("E:/Chapter 4 - foraging success/Metadata_MASTER.csv") %>%
+#start with an empty environment
+rm(list = ls())
+gc()
+invisible(gc())
+#load packages
+pacman::p_load(tidyverse, dplyr, lubridate, here, ggExtra, zoo)
+
+#load data
+metadata <- read.csv("D:/Chapter 4 - foraging success/Metadata_MASTER.csv") %>%
   filter(!is.na(AXY_filename_new))   #read in metadata and filter so only interested in deployments with axy data
 
 deploys <- unique(metadata$deployID)  # create a list of deploy IDs which had an axy
 
-input_dir <- ("E:/raw_penguin/Robben/AXY_Raw/")
-output_dir <- ("E:/Chapter 4 - foraging success/processed_data/")
+input_dir <- ("D:/raw_penguin/Robben/AXY_Raw/") #where to find raw axy data
+output_dir <- ("D:/Chapter 4 - foraging success/processed_data/") 
+csv_dir <- ("D:/Chapter 4 - foraging success/wiggles_ODBA_files/") #where to save csv files
 
+#list all files that end in axytdr in input_dir
 AXYTDRfiles <- fs::dir_ls(input_dir, glob = "*_axytdr*.csv", type="file", recurse = TRUE) # list location all files with "tdr" in the name
+#extract deployID from filenames
 AXYTDRdeploys <- as.data.frame(AXYTDRfiles) %>%
   mutate(filename = (basename(AXYTDRfiles))) %>% #strip out the filename by removing path prefix
   mutate(deployID = (str_replace(filename,"_axytdr", replacement=""))) %>% #extract birdID by removing axytdr from filename
@@ -19,15 +28,14 @@ AXYTDRdeploys <- as.data.frame(AXYTDRfiles) %>%
 #for the purpose of the test <- subset so we have a list of deployIDs that match the ones in the test folder
 axydeploys <-  as.data.frame(deploys) %>% filter(deploys %in% AXYTDRdeploys$deployID)
 axydeploys <- axydeploys$deploys
-axydeploys <- axydeploys[-c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15)]
+
+#read in all TDR data
 tdrALL <- readRDS(here(output_dir, ("TDR_final.RDS")))
 
-#templist = list()  # create templist
 
-#i<- axydeploys[1]
 for (i in axydeploys) {    # start loop
   
-  filename = AXYTDRdeploys$AXYTDRfiles[AXYTDRdeploys$deployID == i]
+  filename = AXYTDRdeploys$AXYTDRfiles[AXYTDRdeploys$deployID == i] #subset so we are only reading in one file at a time
   
   
   ## need to sort out time for 2017 data - currently reading in %M:%OS and ignoring hours
@@ -44,7 +52,22 @@ for (i in axydeploys) {    # start loop
            bottom_length = sum(bottom)) %>%
     mutate(Shape = ifelse(bottom_length > 4, "U", "V"))  # add dive shape column based on bottom time
   
+  # Wiggles step 1: Subsetting for bottom phase only where we're looking for "wiggles"
+  TDR_bottom <- tdr %>%
+    filter(Divephase == "B") # subset for bottom phase only 
   
+  # Wiggles step 2: Working out wiggles according to the definition in Campell, 2016.
+  Wiggles_final <- TDR_bottom %>%
+    group_by(deployID, DiveID) %>%  # group by DiveID
+    mutate(lag = lag(Calibrated_depth,1)-Calibrated_depth) %>% # commutes the change in depth from the next row 
+    mutate(rollm = rollmean(lag, k = 3, fill = NA, align = 'right')) %>% # commutes the rolling average for the previous 3 seconds  
+    mutate(diff =  lag- rollm) %>% # commutes the differences between rolling mean and lag
+    
+    # defines wiggles where the difference between rolling mean and lag is greater than or equal to 0.3
+    mutate( Wiggle = case_when(diff >= 0.3 ~ 1,
+                               diff <= -0.3 ~ 1,
+                               diff < 0.3 & diff > -0.3 ~ 0 )) %>%
+    dplyr::select(-c(lag,rollm,diff)) # remove unwanted columns
   
   # identify start time of first foraging dive
   firstdive <- tdr %>% 
@@ -55,27 +78,28 @@ for (i in axydeploys) {    # start loop
               diveID = first(DiveID))
   
   # identify end time of last foraging dive
-  lastdive <- tdr %>% 
+  lastdive <-tdr %>% 
     ungroup() %>%
     filter(Shape == "U") %>%
     filter(tripID == 1) %>%
     summarise(DateTime = last(DateTime),
               diveID = last(DiveID))
   
-  #subset axy data so it starts 10 minutes before the first forage dive starts
-  # and ends 10 minutes after the last dive ends
+  #subset axy data so it starts 1 minute before the first forage dive starts
+  # and ends 1 minute after the last dive ends
   axy_subset <- axy %>%
     filter(DateTime > firstdive$DateTime - minutes(1)) %>%
     filter(DateTime < lastdive$DateTime + minutes(1)) 
   
   axytdr <- axy_subset %>%
-    left_join(., tdr) %>%
+    left_join(., Wiggles_final) %>%
     dplyr::select(-c(Temp, Pressureformat, TDR_tag, bottom, bottom_length)) %>%
-    fill(DiveID, .direction = "down") %>%
+    fill(DiveID, .direction = "down") %>% 
     fill(Shape, .direction = "down") %>%
     fill(Divephase, .direction = "down")
   
-  diveIDs <-  axytdr %>%
+  #create a list of all forage diveIDs in the file
+  diveIDs <-  axytdr %>%  
     filter(DiveID > 0) %>%
     filter(!is.na(DiveID)) %>%
     filter(Shape == "U")
@@ -84,7 +108,6 @@ for (i in axydeploys) {    # start loop
   
   templist1 = list()
   #j <- diveIDlist[1]
-  
   
   for (j in diveIDlist) { 
     
@@ -106,9 +129,7 @@ for (i in axydeploys) {    # start loop
       mutate_at(c('X', 'Y', 'Z'), as.numeric) %>%
       mutate(totala = sqrt((X^2)+(Y^2)+(Z^2)))  #add a column for overall dynamic body acceleration
     
-    # add in wiggles here
-    
-    
+
     templist1[[j]] <- axytdr_dive  
     
     rm(axytdr_j, divestart, diveend, axytdr_dive)
@@ -116,7 +137,8 @@ for (i in axydeploys) {    # start loop
   }
   # spit out a csv file for each individual  
 axytdr1 <- data.table::rbindlist(templist1) 
-  
+ 
+write.csv(axytdr1, paste0(csv_dir, i, "_subset.csv")) 
  # templist[[i]] <- data.table::rbindlist(templist1) 
   
  # finalaxytdr<- data.table::rbindlist(templist)
@@ -126,45 +148,21 @@ axytdr1 <- data.table::rbindlist(templist1)
   rm(axy, tdr, firstdive, lastdive, axy_subset, axytdr, diveIDs, diveIDlist)
 }
 
-#saveRDS(finalaxytdr, file=(file.path(output_dir,(paste0("AXYTDRdives",".RDS"))))) #Save as an RDS object (load this later with 'readRDS' function)
 
 
 
-## STEP 1: read in axy file
-# - make sure all of the column names are the same
-# - add deployID column
 
 
-## STEP 2: read in tdr file (already processed and gone through the pipeline)
-# - subset for same deployID
-# - subset for trip 1 (avoid pseudoreplication) and for U dives ( bottom time > 4 s)
-# - identify datetime for first dive - 10 minutes and last divev + 10 minutes
 
 
-## STEP 3: subset the axy
-#  remove points before datetime(tdr first trip - 10)
-# remove points before datetime(tdr last trip + 10)
 
 
-## STEP 4: merge subsetted axy with subsetted tdr
-# subset for foraging dives +/- 5 seconds from datetime(tdr, when diveID = x)
-# calculate obda
-
-# rm(old df (NOT TEMPLIST))
-
-#end loop
-
-
-## STEP 5: bring all the datasets into one
-# templist > rbindlist (Jacqui's polygon plot code)
-# read in metadata
-# columns: deployID, diveID, DateTime, OBDA, Sex
 
 
 
 ## Some exploratory plots
 
-test <- finalaxytdr %>%
+test <- axytdr1 %>%
   fill(Divephase, .direction = "down") 
 
 testtdr <- test %>%
@@ -183,7 +181,7 @@ test1 <- test %>%
   filter(deployID == "01_2018R") %>%
   filter(DiveID == 111)
 
-summary(finalaxytdr)
+summary(axytdr1)
 
 ggplot(data = testtdr) +
   geom_histogram(aes(x = dDepth)) + geom_vline(aes(xintercept = 0.3), col = "blue") +
