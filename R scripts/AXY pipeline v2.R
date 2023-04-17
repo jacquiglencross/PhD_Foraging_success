@@ -32,7 +32,7 @@ axydeploys <- axydeploys$deploys
 #read in all TDR data
 tdrALL <- readRDS(here(output_dir, ("TDR_final.RDS")))
 
-
+i = axydeploys[1]
 for (i in axydeploys) {    # start loop
   
   filename = AXYTDRdeploys$AXYTDRfiles[AXYTDRdeploys$deployID == i] #subset so we are only reading in one file at a time
@@ -69,6 +69,11 @@ for (i in axydeploys) {    # start loop
                                diff < 0.3 & diff > -0.3 ~ 0 )) %>%
     dplyr::select(-c(lag,rollm,diff)) # remove unwanted columns
   
+  Wiggles_perdive <- Wiggles_final %>%
+    group_by(DiveID) %>%
+    filter(!is.na(Wiggle)) %>%
+    summarise(no_wiggles = sum(Wiggle))
+  
   # identify start time of first foraging dive
   firstdive <- tdr %>% 
     ungroup() %>%
@@ -91,9 +96,12 @@ for (i in axydeploys) {    # start loop
     filter(DateTime > firstdive$DateTime - minutes(1)) %>%
     filter(DateTime < lastdive$DateTime + minutes(1)) 
   
+  tdrshort <- tdr %>%        #create a reduced version of the tdr data with some of the valuable columns we want to keep
+    dplyr::select(DateTime, DiveID, Shape, Divephase)
+  
   axytdr <- axy_subset %>%
-    left_join(., Wiggles_final) %>%
-    dplyr::select(-c(Temp, Pressureformat, TDR_tag, bottom, bottom_length)) %>%
+    left_join(tdrshort) %>%
+    merge(., Wiggles_perdive, all.y = T) %>%
     fill(DiveID, .direction = "down") %>% 
     fill(Shape, .direction = "down") %>%
     fill(Divephase, .direction = "down")
