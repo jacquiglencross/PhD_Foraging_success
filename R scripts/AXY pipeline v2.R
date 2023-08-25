@@ -5,7 +5,7 @@ rm(list = ls())
 gc()
 invisible(gc())
 #load packages
-pacman::p_load(tidyverse, dplyr, lubridate, here, ggExtra, zoo)
+pacman::p_load(tidyverse, dplyr, lubridate, here, ggExtra, zoo, beepr)
 
 #load data
 metadata <- read.csv("D:/Chapter 4 - foraging success/Metadata_MASTER.csv") %>%
@@ -156,15 +156,53 @@ write.csv(axytdr1, paste0(csv_dir, i, "_subset.csv"))
   rm(axy, tdr, firstdive, lastdive, axy_subset, axytdr, diveIDs, diveIDlist)
 }
 
+gc()
+invisible(gc())
+
+# read in all subset files to create one file
+
+setwd(csv_dir)
+AXYTDRfiles <- fs::dir_ls(csv_dir, glob = "*_subset*.csv", type="file", recurse = FALSE) # list location all files with "tdr" in the name
+AXYTDRdeploys <- AXYTDRfiles %>%
+  set_names(nm = (basename(.))) %>% #strip out the filename by removing path prefix
+  map_df(read_csv, .id="filename",col_types = cols(.default = "c"))  %>%  #read in TDR files and add filename column (all columns as characters)
+  mutate(deployID = (str_replace(filename,"_subset", replacement=""))) %>% #extract birdID by removing subset from filename
+  mutate(deployID = (tools::file_path_sans_ext(deployID))) #and remove file suffix  
+  
+
+modivesums <- AXYTDRdeploys %>%
+  mutate(totala = as.numeric(totala),
+         Wiggle = as.numeric(no_wiggles),
+         Wiggle_bottom = ifelse(is.na(Wiggle), 0, Wiggle)) %>%
+  filter(Divephase == "B") %>%
+  group_by(deployID, DiveID) %>%
+  summarise(meanODBA = mean(totala),
+            Shape = first(Shape),
+            no_wiggles = as.factor(max(Wiggle_bottom))) %>%
+  mutate(wiggleYesNo = ifelse(no_wiggles == 1, "Wiggle", "NoWiggle"))
 
 
+metadatashort <- metadata %>%
+  select(deployID, Year, Sex_0.5)
+divessums <- modivesums %>%
+  left_join(., metadatashort)
 
+ggplot(data = modivesums) +
+  geom_histogram(aes(x = meanODBA)) + #geom_vline(aes(xintercept = 0.3), col = "blue") +
+  #geom_vline(aes(xintercept = -0.3), col = "blue") + 
+  facet_wrap(~ wiggleYesNo, ncol = 1) + theme_classic() 
+ggplot(data = modivesums) +
+  geom_point(aes(x = meanODBA, y = no_wiggles)) + #geom_vline(aes(xintercept = 0.3), col = "blue") +
+  theme_classic() 
 
+library(lme4)
 
-
-
-
-
+subset_divessums <- divessums %>% filter(!is.na(Sex_0.5)) %>% filter(Year < 2021)
+model1 <- lmerTest::lmer(meanODBA ~ Sex_0.5 + as.factor(Year) + (1|deployID), data = subset_divessums)
+summary(model1)
+#I have temporarily removed files that are empty so it runs - check why these files are empty
+# either because no wiggles or something has gone wrong
+#eg <- read.csv("D:/Chapter 4 - foraging success/wiggles_ODBA_files/02_2017R_subset.csv")
 
 
 
