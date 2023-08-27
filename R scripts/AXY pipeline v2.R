@@ -179,13 +179,15 @@ modivesums <- AXYTDRdeploys %>%
   summarise(meanODBA = mean(totala),
             Shape = first(Shape),
             no_wiggles = as.factor(max(Wiggle_bottom))) %>%
-  mutate(wiggleYesNo = ifelse(no_wiggles == 1, "Wiggle", "NoWiggle"))
-
+  mutate(wiggleYesNo = ifelse(no_wiggles != 0, "Wiggle", "NoWiggle"))
+write.csv(modivesums, paste0(output_dir, "divesummaries.csv"))
 
 metadatashort <- metadata %>%
   select(deployID, Year, Sex_0.5)
 divessums <- modivesums %>%
   left_join(., metadatashort)
+
+beep(5)
 
 ggplot(data = modivesums) +
   geom_histogram(aes(x = meanODBA)) + #geom_vline(aes(xintercept = 0.3), col = "blue") +
